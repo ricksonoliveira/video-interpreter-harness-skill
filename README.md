@@ -1,15 +1,15 @@
 # video-interpreter-harness-skill
 
-Skill para agentes (Claude, Codex, Cursor) **assistirem vídeos de verdade**: `ffmpeg` extrai frames + áudio, Whisper gera transcript, e o modelo lê as imagens com timestamps — útil pra screencasts, demos e bug repros.
+A skill so agents (Claude, Codex, Cursor) can **actually watch videos**: `ffmpeg` extracts frames + audio, Whisper builds a transcript, and the model reads the images with timestamps — useful for screencasts, demos, and bug repros.
 
-Não faz o modelo “ver bytes de vídeo” nativamente; dá o pipeline técnico no shell.
+It does not make the model natively “see” video bytes; it gives a real shell pipeline.
 
-## Pré-requisitos
+## Prerequisites
 
 - `ffmpeg` / `ffprobe` (`brew install ffmpeg`)
-- Whisper CLI (opcional, se o vídeo tiver fala): `openai-whisper`, `faster-whisper`, etc.
+- Whisper CLI (optional, if the video has speech): `openai-whisper`, `faster-whisper`, etc.
 
-## Instalar
+## Install
 
 ### Claude Code
 
@@ -18,7 +18,7 @@ mkdir -p ~/.claude/skills/video-interpreter
 cp skills/video-interpreter/SKILL.md ~/.claude/skills/video-interpreter/
 ```
 
-Reinicie o Claude. Use `/video-interpreter` ou peça pra assistir um vídeo.
+Restart Claude. Use `/video-interpreter` or ask it to watch a video.
 
 ### Codex
 
@@ -28,24 +28,24 @@ cp skills/video-interpreter/SKILL.md ~/.codex/skills/video-interpreter/
 cp skills/video-interpreter/agents/openai.yaml ~/.codex/skills/video-interpreter/agents/
 ```
 
-Reinicie o Codex. Use `/video-interpreter` ou o nome **Video Interpreter**.
+Restart Codex. Use `/video-interpreter` or **Video Interpreter**.
 
 ### Cursor
 
-Copie a pasta para as skills do projeto ou do usuário:
+Copy the skill into project or user skills:
 
 ```bash
-# no projeto
+# project
 mkdir -p .cursor/skills/video-interpreter
 cp skills/video-interpreter/SKILL.md .cursor/skills/video-interpreter/
 
-# ou global (se você usa ~/.cursor/skills)
+# or global (if you use ~/.cursor/skills)
 mkdir -p ~/.cursor/skills/video-interpreter
 cp skills/video-interpreter/SKILL.md ~/.cursor/skills/video-interpreter/
 ```
 
-No chat, peça pra seguir a skill **video-interpreter** ao analisar um `.mp4`/`.mov`.
+In chat, ask it to follow the **video-interpreter** skill when analyzing a `.mp4`/`.mov`.
 
-## Uso rápido
+## Quick use
 
-Aponte um vídeo local e peça o resumo (com timestamps, passos e o que quebrou). Vídeos curtos de bug (~1–5 min) são o sweet spot de custo.
+Point at a local video and ask for a summary (timestamps, steps, what broke). Short bug screencasts (~1–5 min) are the cost sweet spot.
