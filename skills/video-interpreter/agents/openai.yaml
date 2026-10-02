@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Interpreter"
+  short_description: "Watch videos via ffmpeg frames + transcript"
+  default_prompt: "Use $video-interpreter to watch this video and summarize what happens, citing timestamps."
