@@ -16,11 +16,16 @@ Give a real pipeline to “watch” a video: probe → extract timed frames → 
 ```bash
 ffmpeg -version
 ffprobe -version
-
-whisper --help          # openai-whisper
-# or: faster-whisper / mlx-whisper / a hosted speech-to-text CLI
 ```
-If `ffmpeg` is missing: install via the OS package manager (`brew install ffmpeg`, `apt install ffmpeg`, etc.) before continuing.
+If `ffmpeg` is missing: `brew install ffmpeg` (or `apt install ffmpeg`).
+
+**Whisper (do not use system Python on macOS/PEP 668):**
+```bash
+python3 -m venv ~/.video-interpreter-venv
+~/.video-interpreter-venv/bin/pip install -U pip openai-whisper
+# use: ~/.video-interpreter-venv/bin/whisper …
+```
+Prefer that venv forever. Alternatives: `faster-whisper`, `mlx-whisper`, or a hosted STT CLI. Never stop at “Whisper didn’t install because of PEP 668” without creating the venv.
 
 ## Inputs
 - Local path to `.mp4` / `.mov` / `.webm` / `.mkv`, or a URL you download first to a local file.
@@ -29,8 +34,10 @@ If `ffmpeg` is missing: install via the OS package manager (`brew install ffmpeg
 ## Step 1 — Probe
 ```bash
 ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate -of json "$VIDEO"
+# loudness check (screencasts are often very quiet)
+ffmpeg -i "$VIDEO" -af volumedetect -f null - 2>&1 | grep -E 'mean_volume|max_volume'
 ```
-Record: duration, resolution, has-video / has-audio. Cap work for very long videos (see Tuning).
+Record: duration, resolution, has-video / has-audio, mean_volume. Cap work for very long videos (see Tuning).
 
 ## Step 2 — Extract frames (prefer scene change + density floor)
 **Screen recordings / bug repros** (subtle UI changes): lower scene threshold and keep a time floor so slow changes still get sampled.
@@ -54,21 +61,29 @@ Hard cap: keep at most **~60–80** frames for a single analysis pass. If over t
 
 Build a **manifest** `$OUT/manifest.jsonl` mapping `file → approximate timestamp`. Parse `pts_time` from `showinfo` in the log when available; for `fps=N` mode, timestamp ≈ `(index-1)/N` seconds.
 
-## Step 3 — Audio → transcript
+## Step 3 — Audio → transcript (required when speech is present)
 ```bash
-ffmpeg -y -i "$VIDEO" -vn -ac 1 -ar 16000 -c:a pcm_s16le "$OUT/audio.wav"
+# Normalize quiet mic / screencast audio (common: mean around -40 dB)
+ffmpeg -y -i "$VIDEO" -vn -ac 1 -ar 16000 \
+  -af "loudnorm=I=-16:TP=-1.5:LRA=11,highpass=f=80" \
+  -c:a pcm_s16le "$OUT/audio.wav"
 ```
-Then transcribe (example with Whisper CLI):
+If `loudnorm` is unavailable, use `volume=20dB` or `dynaudnorm` instead.
+
+Transcribe with the **venv** Whisper (not system pip):
 ```bash
-whisper "$OUT/audio.wav" --model base --output_format json --output_dir "$OUT"
+WHISPER="$HOME/.video-interpreter-venv/bin/whisper"
+# create venv + install if missing (see Prerequisites)
+"$WHISPER" "$OUT/audio.wav" --model base --output_format json --output_dir "$OUT"
 # Prefer language flag when known: --language pt / en
 ```
-If the video has a sidecar `.srt`/`.vtt` or an embedded subtitle stream, use that instead of re-transcribing. Silent UI-only screencasts: skip Whisper; rely on frames.
+
+If the video has a sidecar `.srt`/`.vtt` or an embedded subtitle stream, use that instead of re-transcribing. **Silent** UI-only screencasts (no speech track / near-zero max_volume): skip Whisper and say so. If speech exists but transcription fails, **fix and retry** (venv + loudnorm) before falling back to frames-only; do not invent dialogue.
 
 ## Step 4 — Actually “watch” (vision + transcript)
 1. Read the transcript (with timestamps if present).
 2. Open / attach frames **in chronological order**, each labeled with its timestamp from the manifest (e.g. `frame_0012.jpg @ 00:41`).
-3. First pass: describe what happens over time; call out UI, errors, clicks, and anything ticket-worthy. **Cite timestamps.**
+3. First pass: describe what happens over time; call out UI, errors, clicks, and anything ticket-worthy. **Cite timestamps.** Prefer aligning what you see with what the narrator says.
 4. Never invent dialogue that is not in the transcript. Never invent UI text you did not read from a frame.
 5. For follow-ups (“what happens at 1:20?”, “copy the error string”), re-open only the relevant frames / transcript slice — don’t re-extract unless needed.
 
@@ -85,7 +100,9 @@ Lead with what happened. Then: broken behavior, exact steps visible, environment
 
 ## Failure modes
 - No `ffmpeg`: install it; don’t pretend you watched.
-- Corrupt / unsupported codec: remux or re-encode once (`ffmpeg -i in -c copy out.mp4` or re-encode h264), then retry.
+- Whisper / PEP 668: create `~/.video-interpreter-venv` and install there; don’t give up after a system-pip refusal.
+- Quiet audio: run `volumedetect`, then `loudnorm` (or `volume=20dB`) before Whisper.
+- Corrupt / unsupported codec: remux or re-encode once, then retry.
 - Vision can’t read tiny text: re-extract a crop or higher-res still around that timestamp (`ffmpeg -ss T -i "$VIDEO" -frames:v 1 -q:v 2 still.jpg`).
 - Empty audio / music-only: say so; don’t invent narration.
 
